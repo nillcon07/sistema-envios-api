@@ -1,0 +1,46 @@
+# ================================================
+# GITIGNORE - Archivos que NO se suben a Git
+# ================================================
+
+# Archivos de entorno con credenciales
+.env
+.env.local
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos locales
+pedidos.txt
+pedidostemp.txt
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Databases locales
+*.db
+*.sqlite3

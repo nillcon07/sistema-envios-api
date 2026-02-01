@@ -1,0 +1,26 @@
+# ================================================
+# RENDER.YAML - Configuración para Render
+# ================================================
+# Este archivo le dice a Render cómo deployar tu app
+
+services:
+  - type: web
+    name: sistema-envios-api
+    env: python
+    buildCommand: pip install -r requirements_postgres.txt
+    startCommand: uvicorn main_postgres:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: 5432
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSLMODE
+        value: require
