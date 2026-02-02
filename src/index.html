@@ -78,40 +78,57 @@
         document.addEventListener('DOMContentLoaded', cargarPedidos);
 
         async function cargarPedidos() {
-            const res = await fetch(`${API_URL}/pedidos`);
-            const data = await res.json();
-            const tbody = document.getElementById('tablaPedidos');
-            tbody.innerHTML = '';
+            try {
+                const res = await fetch(`${API_URL}/pedidos`);
+                const data = await res.json();
+                const tbody = document.getElementById('tablaPedidos');
+                tbody.innerHTML = '';
 
-            data.pedidos.forEach(p => {
-                const statusClass = `status-${p.estado.toLowerCase().replace(/\s/g, '')}`;
-                tbody.innerHTML += `
-                    <tr>
-                        <td class="fw-bold">${p.codigo}</td>
-                        <td><small>${p.cliente}</small><br>${p.direccion}</td>
-                        <td><span class="status-badge ${statusClass}">${p.estado}</span></td>
-                        <td>
-                            <select class="form-select form-select-sm" onchange="cambiarEstado('${p.codigo}', this.value)">
-                                <option value="" selected disabled>Cambiar a...</option>
-                                <option value="Pendiente">Pendiente</option>
-                                <option value="Despachado">Despachado</option>
-                                <option value="En Camino">En Camino</option>
-                                <option value="Entregado">Entregado</option>
-                                <option value="Cancelado">Cancelado</option>
-                            </select>
-                        </td>
-                    </tr>
-                `;
-            });
+                data.pedidos.forEach(p => {
+                    const statusClass = `status-${p.estado.toLowerCase().replace(/\s/g, '')}`;
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="fw-bold">${p.codigo}</td>
+                            <td><small>${p.cliente}</small><br>${p.direccion}, ${p.provincia}</td>
+                            <td><span class="status-badge ${statusClass}">${p.estado}</span></td>
+                            <td>
+                                <select class="form-select form-select-sm" onchange="cambiarEstado('${p.codigo}', this.value)">
+                                    <option value="" selected disabled>Acción...</option>
+                                    <option value="Pendiente">Pendiente</option>
+                                    <option value="Despachado">Despachado</option>
+                                    <option value="En Camino">En Camino</option>
+                                    <option value="Entregado">Entregado</option>
+                                    <option value="Cancelado">Cancelado</option>
+                                </select>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (error) {
+                console.error("Error cargando pedidos:", error);
+            }
         }
 
         async function cambiarEstado(codigo, nuevoEstado) {
-            await fetch(`${API_URL}/pedidos/cambiar_estado`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ codigo: codigo, nuevo_estado: nuevoEstado })
-            });
-            cargarPedidos();
+            try {
+                const res = await fetch(`${API_URL}/pedidos/cambiar_estado`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ codigo: codigo, nuevo_estado: nuevoEstado })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok || !data.exito) {
+                    // AQUÍ ESTÁ LA CLAVE: Mostramos el error que viene del Backend (Python)
+                    alert("⚠️ " + (data.detail || data.mensaje));
+                    cargarPedidos(); // Recargamos para deshacer el cambio visual erróneo
+                } else {
+                    cargarPedidos(); // Si salió bien, recargamos la tabla
+                }
+            } catch (e) {
+                alert("Error de conexión con el servidor");
+            }
         }
 
         async function crearEnvio(e) {
@@ -121,13 +138,26 @@
                 direccion: document.getElementById('direccion').value,
                 provincia: document.getElementById('provincia').value
             };
-            await fetch(`${API_URL}/pedidos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(datos)
-            });
-            e.target.reset();
-            cargarPedidos();
+            
+            try {
+                const res = await fetch(`${API_URL}/pedidos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datos)
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.exito) {
+                    // Si el backend rechaza (ej: provincia inválida), mostramos el mensaje
+                    alert("❌ Error: " + (data.detail || data.mensaje));
+                } else {
+                    e.target.reset();
+                    cargarPedidos();
+                }
+            } catch (e) {
+                alert("Error al crear el envío");
+            }
         }
     </script>
 </body>
