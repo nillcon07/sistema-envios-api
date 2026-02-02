@@ -269,7 +269,18 @@ def health_check():
         "tiene_datos": tiene_datos,
         "mensaje": "API funcionando correctamente"
     }
+class SolicitudAvance(BaseModel):
+    codigo: str
 
+@app.post("/pedidos/avanzar")
+def avanzar_estado_pedido(solicitud: SolicitudAvance):
+    """Endpoint para mover el pedido a la siguiente etapa"""
+    resultado = logic.avanzar_estado(solicitud.codigo)
+    
+    if resultado['exito']:
+        return resultado
+    else:
+        raise HTTPException(status_code=400, detail=resultado['mensaje'])
 
 # =====================================================
 # EJECUCIÓN DEL SERVIDOR
