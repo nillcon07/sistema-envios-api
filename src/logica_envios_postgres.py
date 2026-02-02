@@ -686,89 +686,55 @@ def listar_todos_envios():
             liberar_conexion(conn)
 
 
-def cambiar_estado_envio(codigo, nuevo_estado):
-    """
-    Cambia el estado de un envío.
-    
-    Estados válidos: "Pendiente", "En camino", "Entregado"
-    
-    Retorna: dict con la estructura:
-        {
-            'exito': bool,
-            'mensaje': str,
-            'pedido_actualizado': dict o None
-        }
-    """
-    es_valido, msg_error = validar_codigo_envio(codigo)
-    if not es_valido:
-        return {
-            'exito': False,
-            'mensaje': msg_error,
-            'pedido_actualizado': None
-        }
-    
-    estados_validos = ["Pendiente", "En camino", "Entregado"]
-    if nuevo_estado not in estados_validos:
-        return {
-            'exito': False,
-            'mensaje': f'Estado inválido. Debe ser uno de: {", ".join(estados_validos)}',
-            'pedido_actualizado': None
-        }
-    
-    conn = None
+def cambiar_estado_manual(codigo, nuevo_estado):
+    """Cambia el estado de un pedido a un valor específico"""
+    conn = obtener_conexion()
+    if not conn:
+        return {'exito': False, 'mensaje': 'Error de conexión a BD'}
+
     try:
-        conn = obtener_conexion()
         cursor = conn.cursor()
         
-        cursor.execute("""
-            UPDATE pedidos
-            SET estado = %s
-            WHERE UPPER(codigo_tracking) = UPPER(%s)
-            RETURNING id, codigo_tracking, nombre_cliente, direccion, provincia, estado, fecha_creacion
-        """, (nuevo_estado, codigo))
+        # Verificar que el pedido existe
+        cursor.execute("SELECT codigo_tracking FROM pedidos WHERE codigo_tracking = %s", (codigo,))
+        if not cursor.fetchone():
+            return {'exito': False, 'mensaje': 'Pedido no encontrado'}
+
+        # Actualizar estado
+        cursor.execute("UPDATE pedidos SET estado = %s WHERE codigo_tracking = %s", (nuevo_estado, codigo))
+        conn.commit()
+        cursor.close()
         
-        resultado = cursor.fetchone()
-        
-        if resultado:
-            conn.commit()
-            
-            pedido_actualizado = {
-                'contador': resultado[0],
-                'codigo': resultado[1],
-                'cliente': resultado[2],
-                'direccion': resultado[3],
-                'provincia': resultado[4],
-                'estado': resultado[5],
-                'fecha': resultado[6].strftime('%d/%m/%Y %H:%M')
-            }
-            
-            cursor.close()
-            
-            return {
-                'exito': True,
-                'mensaje': f'Estado actualizado a: {nuevo_estado}',
-                'pedido_actualizado': pedido_actualizado
-            }
-        else:
-            cursor.close()
-            return {
-                'exito': False,
-                'mensaje': 'No se encontró un pedido con ese código',
-                'pedido_actualizado': None
-            }
-    
+        return {'exito': True, 'mensaje': f'Estado actualizado a: {nuevo_estado}'}
+
     except Exception as e:
-        if conn:
-            conn.rollback()
-        return {
-            'exito': False,
-            'mensaje': f'Error al actualizar: {str(e)}',
-            'pedido_actualizado': None
-        }
-    
+        conn.rollback()
+        return {'exito': False, 'mensaje': str(e)}
     finally:
-        if conn:
-            liberar_conexion(conn)
+        liberar_conexion(conn)
+
+def obtener_estadisticas():
+    """Calcula métricas del sistema"""
+    conn = obtener_conexion()
+    if not conn:
+        return {'total_pedidos': 0, 'total_provincias': 0}
+
+    try:
+        cursor = conn.cursor()
+        # Contar total de pedidos
+        cursor.execute("SELECT COUNT(*) FROM pedidos")
+        total_pedidos = cursor.fetchone()[0]
+        
+        # Contar provincias únicas (lugares distintos a los que hemos enviado)
+        cursor.execute("SELECT COUNT(DISTINCT provincia) FROM pedidos")
+        total_provincias = cursor.fetchone()[0]
+        
+        cursor.close()
+        return {'total_pedidos': total_pedidos, 'total_provincias': total_provincias}
+    except:
+        return {'total_pedidos': 0, 'total_provincias': 0}
+    finally:
+        liberar_conexion(conn)
 
 
 def procesar_devolucion(codigo, motivo):
