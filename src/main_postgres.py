@@ -32,6 +32,10 @@ def startup_event():
 # MODELOS DE DATOS (Pydantic para validación de entrada)
 # =====================================================
 
+class CambioEstado(BaseModel):
+    codigo: str
+    nuevo_estado: str
+
 class NuevoEnvio(BaseModel):
     nombre_cliente: str
     direccion: str
@@ -216,21 +220,12 @@ def consultar_por_fecha(consulta: ConsultaPorFecha):
     }
 
 
-@app.put("/pedidos/estado")
-def actualizar_estado(cambio: CambioEstado):
-    """Cambia el estado de un pedido"""
-    
-    resultado = logic.cambiar_estado_envio(
-        codigo=cambio.codigo,
-        nuevo_estado=cambio.nuevo_estado
-    )
-    
+@app.post("/pedidos/cambiar_estado")
+def cambiar_estado_endpoint(datos: CambioEstado):
+    """Permite cambiar manualmente el estado desde una lista"""
+    resultado = logic.cambiar_estado_manual(datos.codigo, datos.nuevo_estado)
     if resultado['exito']:
-        return {
-            "exito": True,
-            "mensaje": resultado['mensaje'],
-            "pedido_actualizado": resultado['pedido_actualizado']
-        }
+        return resultado
     else:
         raise HTTPException(status_code=400, detail=resultado['mensaje'])
 
