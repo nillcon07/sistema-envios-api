@@ -874,3 +874,45 @@ def procesar_devolucion(codigo, motivo):
     finally:
         if conn:
             liberar_conexion(conn)
+
+def avanzar_estado(codigo):
+    """Avanza el estado del pedido al siguiente paso lógico"""
+    conn = obtener_conexion()
+    if not conn:
+        return {'exito': False, 'mensaje': 'Error de conexión a BD'}
+
+    try:
+        cursor = conn.cursor()
+        
+        # 1. Averiguar estado actual
+        cursor.execute("SELECT estado FROM pedidos WHERE codigo_tracking = %s", (codigo,))
+        resultado = cursor.fetchone()
+        
+        if not resultado:
+            return {'exito': False, 'mensaje': 'Pedido no encontrado'}
+            
+        estado_actual = resultado[0]
+        nuevo_estado = estado_actual
+        
+        # 2. Máquina de estados simple
+        if estado_actual == "Pendiente":
+            nuevo_estado = "En Camino"
+        elif estado_actual == "En Camino":
+            nuevo_estado = "Entregado"
+        elif estado_actual == "Entregado":
+            return {'exito': False, 'mensaje': 'El pedido ya fue entregado'}
+        else:
+            return {'exito': False, 'mensaje': f'No se puede avanzar desde: {estado_actual}'}
+
+        # 3. Actualizar
+        cursor.execute("UPDATE pedidos SET estado = %s WHERE codigo_tracking = %s", (nuevo_estado, codigo))
+        conn.commit()
+        cursor.close()
+        
+        return {'exito': True, 'mensaje': f'Actualizado a: {nuevo_estado}', 'nuevo_estado': nuevo_estado}
+
+    except Exception as e:
+        conn.rollback()
+        return {'exito': False, 'mensaje': str(e)}
+    finally:
+        liberar_conexion(conn)
