@@ -1,15 +1,19 @@
 import psycopg2
 from psycopg2 import pool
-import datetime
 import os
 
 # CONFIGURACIÓN DE CONEXIÓN A POSTGRESQL
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+if not DB_PASSWORD:
+    # Esto previene que la app arranque si olvidaste configurar la variable en Render
+    raise ValueError("❌ ERROR CRÍTICO: La variable de entorno DB_PASSWORD no está configurada.")
+
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'ep-crimson-butterfly-aht6exsh-pooler.c-3.us-east-1.aws.neon.tech'),
     'port': int(os.getenv('DB_PORT', '5432')),
     'database': os.getenv('DB_NAME', 'neondb'),
     'user': os.getenv('DB_USER', 'neondb_owner'),
-    'password': os.getenv('DB_PASSWORD', 'npg_XsZEkIfy58xG'),
+    'password': DB_PASSWORD, #variable validada
     'sslmode': os.getenv('DB_SSLMODE', 'require')
 }
 
@@ -30,10 +34,9 @@ def liberar_conexion(conn):
     if connection_pool and conn:
         connection_pool.putconn(conn)
 
-# LÓGICA DE VALIDACIÓN (HEREDADA DE TPO.PY)
+# --- LÓGICA DE VALIDACIÓN (Sin cambios, se mantiene tu buena lógica) ---
 
 def sacar_acentos(entrada):
-    """Normaliza texto eliminando acentos (Lógica TPO)"""
     acentos = (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"),
                ("Á", "A"), ("É", "E"), ("Í", "I"), ("Ó", "O"), ("Ú", "U"))
     for i, j in acentos:
@@ -53,25 +56,27 @@ def validar_direccion(direccion):
     return True, ""
 
 def validar_provincia(provincia):
-    """Valida contra lista oficial, aunque el front muestre pocas opciones (Seguridad Backend)"""
     PROVINCIAS = (
         "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Cordoba", "Corrientes",
         "Entre Rios", "Formosa", "Jujuy", "La Pampa", "La Rioja", "Mendoza",
         "Misiones", "Neuquen", "Rio Negro", "Salta", "San Juan", "San Luis",
         "Santa Cruz", "Santa Fe", "Santiago Del Estero", "Tierra Del Fuego", "Tucuman", "CABA"
     )
+    if not provincia: return False, "Provincia requerida"
     prov_norm = sacar_acentos(provincia.strip().title())
     if prov_norm in PROVINCIAS:
         return True, prov_norm
     return False, f"La provincia '{provincia}' no está permitida en el sistema."
 
-# FUNCIONES DE BASE DE DATOS#
+# --- FUNCIONES DE BASE DE DATOS ---
 
 def inicializar_base_datos():
     exito, msg = inicializar_pool()
     if not exito: return False, msg
     
     conn = obtener_conexion()
+    if not conn: return False, "No se pudo obtener conexión"
+    
     try:
         cursor = conn.cursor()
         cursor.execute("""
@@ -95,6 +100,7 @@ def inicializar_base_datos():
 
 def obtener_ultimo_contador():
     conn = obtener_conexion()
+    if not conn: return 0
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT MAX(id) FROM pedidos")
@@ -104,7 +110,6 @@ def obtener_ultimo_contador():
         liberar_conexion(conn)
 
 def agregar_envio(contador, nombre_cliente, direccion, provincia):
-    # 1. Validaciones estrictas antes de tocar la BD
     ok_nom, msg_nom = validar_nombre(nombre_cliente)
     if not ok_nom: return {'exito': False, 'mensaje': msg_nom}
     
@@ -112,13 +117,14 @@ def agregar_envio(contador, nombre_cliente, direccion, provincia):
     if not ok_dir: return {'exito': False, 'mensaje': msg_dir}
     
     ok_prov, prov_limpia = validar_provincia(provincia)
-    if not ok_prov: return {'exito': False, 'mensaje': prov_limpia} # Aquí rechaza si envían basura
+    if not ok_prov: return {'exito': False, 'mensaje': prov_limpia}
     
-    # 2. Generación de código
     nuevo_id = contador + 1
     codigo = f"ENV{nuevo_id:03d}"
     
     conn = obtener_conexion()
+    if not conn: return {'exito': False, 'mensaje': "Error de conexión DB"}
+    
     try:
         cursor = conn.cursor()
         cursor.execute("""
@@ -135,6 +141,7 @@ def agregar_envio(contador, nombre_cliente, direccion, provincia):
 
 def listar_todos_envios():
     conn = obtener_conexion()
+    if not conn: return {'pedidos': []}
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT codigo_tracking, nombre_cliente, direccion, provincia, estado FROM pedidos ORDER BY id DESC")
@@ -145,16 +152,16 @@ def listar_todos_envios():
         liberar_conexion(conn)
 
 def cambiar_estado_manual(codigo, nuevo_estado):
-    # Validación de estados permitidos
     ESTADOS_VALIDOS = ["Pendiente", "Despachado", "En Camino", "Entregado", "Cancelado"]
     
     if nuevo_estado not in ESTADOS_VALIDOS:
         return {'exito': False, 'mensaje': 'Estado no válido'}
 
     conn = obtener_conexion()
+    if not conn: return {'exito': False, 'mensaje': "Error de conexión DB"}
+    
     try:
         cursor = conn.cursor()
-        # Verificar estado actual (Lógica de negocio: No cancelar entregados)
         cursor.execute("SELECT estado FROM pedidos WHERE codigo_tracking = %s", (codigo,))
         res = cursor.fetchone()
         if not res: return {'exito': False, 'mensaje': 'Pedido no encontrado'}
